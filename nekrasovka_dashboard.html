@@ -1,0 +1,105 @@
+
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Дворовые территории Некрасовки — ГБУ «Жилищник»</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        * { box-sizing: border-box; font-family: 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif; }
+        body { margin: 0; background: #f4f7fc; }
+        .header { background: #1e466e; color: white; padding: 18px 24px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
+        .header h1 { margin: 0 0 6px; font-size: 1.8rem; }
+        .header p { margin: 0; opacity: 0.85; font-size: 1rem; }
+        .container { max-width: 1400px; margin: 20px auto; padding: 0 20px; }
+        .filters-card { background: white; border-radius: 16px; padding: 16px 20px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); display: flex; flex-wrap: wrap; align-items: center; gap: 16px; }
+        .filters-card label { font-weight: 600; color: #1e466e; }
+        #searchInput { flex: 2; min-width: 200px; padding: 10px 14px; border: 1px solid #cbd5e1; border-radius: 40px; font-size: 0.95rem; outline: none; }
+        #searchInput:focus { border-color: #1e466e; box-shadow: 0 0 0 2px rgba(30,70,110,0.2); }
+        .stats { background: #eef2f7; padding: 8px 16px; border-radius: 40px; font-size: 0.9rem; font-weight: 500; }
+        .map-wrapper { background: white; border-radius: 20px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.08); margin-bottom: 28px; }
+        #map { height: 500px; width: 100%; background: #e9f0f5; }
+        .table-wrapper { background: white; border-radius: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); overflow-x: auto; }
+        .table-wrapper h3 { margin: 0; padding: 18px 20px 8px; font-size: 1.3rem; color: #1e466e; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+        th, td { padding: 12px 16px; text-align: left; border-bottom: 1px solid #e2e8f0; }
+        th { background: #f1f5f9; color: #0f2b40; position: sticky; top: 0; }
+        tr:hover { background: #fef9e6; cursor: pointer; }
+        .badge { background: #e0f2fe; color: #0369a1; padding: 4px 10px; border-radius: 30px; font-size: 0.75rem; font-weight: 500; display: inline-block; }
+        .footer { text-align: center; padding: 24px; font-size: 0.8rem; color: #5e6f8d; }
+        @media (max-width: 700px) { .filters-card { flex-direction: column; align-items: stretch; } th, td { padding: 8px 10px; } }
+    </style>
+</head>
+<body>
+<div class="header">
+    <h1>🏘️ Дворовые территории района Некрасовка</h1>
+    <p>Балансодержатель: <strong>ГБУ «Жилищник района Некрасовка»</strong> | Данные из открытых источников и геокодирование</p>
+</div>
+<div class="container">
+    <div class="filters-card">
+        <label>🔍 Фильтр по адресу:</label>
+        <input type="text" id="searchInput" placeholder="Например: Вольская, Рождественская, Защитников..." autocomplete="off">
+        <div class="stats" id="statsCount">Показано: <span id="visibleCount">0</span> / <span id="totalCount">0</span></div>
+    </div>
+    <div class="map-wrapper"><div id="map"></div></div>
+    <div class="table-wrapper">
+        <h3>📋 Список дворовых территорий</h3>
+        <div style="max-height: 450px; overflow-y: auto;">
+            <table id="yardsTable">
+                <thead><tr><th>Адрес</th><th>Балансодержатель</th><th>Источник</th><th>Координаты</th></tr></thead>
+                <tbody id="tableBody"></tbody>
+            </table>
+        </div>
+    </div>
+    <div class="footer">Данные собраны на основе публичных отчётов управы района Некрасовка и встреч с жителями. Маркеры на карте кликабельны.</div>
+</div>
+<script>
+    const yardsData = [
+        { address: "Рождественская улица, д. 10", lat: 55.707069, lng: 37.859402, source: "Обход территории 08.11.2025" },
+        { address: "Рождественская улица, д. 12", lat: 55.707298, lng: 37.859711, source: "Обход территории 08.11.2025" },
+        { address: "Рождественская улица, д. 14", lat: 55.707524, lng: 37.860028, source: "Обход территории 08.11.2025" },
+        { address: "Некрасовская улица, д. 9", lat: 55.702643, lng: 37.857153, source: "Встреча с управой 21.09.2016" },
+        { address: "1-я Вольская улица, д. 1, корп. 3", lat: 55.700164, lng: 37.857048, source: "Встреча с управой 21.09.2016" },
+        { address: "Проспект защитников Москвы, д. 7, корп. 1", lat: 55.707899, lng: 37.851338, source: "Встреча с управой 21.09.2016" },
+        { address: "Проспект защитников Москвы, д. 1", lat: 55.706001, lng: 37.858112, source: "Встреча с управой 21.09.2016" },
+        { address: "2-я Вольская улица, д. 3", lat: 55.699425, lng: 37.860764, source: "Встреча с управой 21.09.2016" },
+        { address: "Проспект Защитников Москвы, д. 7, корп. 2", lat: 55.708022, lng: 37.852037, source: "Благоустройство 24.04.2017" },
+        { address: "2-я Вольская улица, д. 2", lat: 55.699881, lng: 37.859970, source: "Благоустройство 24.04.2017" }
+    ];
+    const balanceHolder = "ГБУ «Жилищник района Некрасовка»";
+    let map, markersLayer;
+
+    function initMap() {
+        map = L.map('map').setView([55.704, 37.856], 14);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; CartoDB', subdomains: 'abcd', maxZoom: 19 }).addTo(map);
+        markersLayer = L.layerGroup().addTo(map);
+    }
+
+    function updateUI() {
+        const term = document.getElementById('searchInput').value.trim().toLowerCase();
+        let filtered = yardsData;
+        if (term) filtered = yardsData.filter(item => item.address.toLowerCase().includes(term));
+        document.getElementById('totalCount').innerText = yardsData.length;
+        document.getElementById('visibleCount').innerText = filtered.length;
+        const tbody = document.getElementById('tableBody');
+        tbody.innerHTML = '';
+        filtered.forEach(item => {
+            const row = tbody.insertRow();
+            row.insertCell(0).innerHTML = `<strong>${item.address}</strong>`;
+            row.insertCell(1).innerHTML = balanceHolder;
+            row.insertCell(2).innerHTML = `<span class="badge">${item.source}</span>`;
+            row.insertCell(3).innerHTML = `${item.lat.toFixed(5)}, ${item.lng.toFixed(5)}`;
+            row.addEventListener('click', () => { map.setView([item.lat, item.lng], 17); L.popup().setLatLng([item.lat, item.lng]).setContent(`<b>${item.address}</b><br>🏢 ${balanceHolder}<br>📌 ${item.source}`).openOn(map); });
+        });
+        markersLayer.clearLayers();
+        filtered.forEach(item => { L.marker([item.lat, item.lng]).bindPopup(`<b>${item.address}</b><br>🏢 ${balanceHolder}<br>📌 ${item.source}`).bindTooltip(item.address, { sticky: true }).addTo(markersLayer); });
+        if (filtered.length) map.fitBounds(L.latLngBounds(filtered.map(p => [p.lat, p.lng])));
+        else map.setView([55.704, 37.856], 13);
+    }
+
+    window.addEventListener('DOMContentLoaded', () => { initMap(); updateUI(); document.getElementById('searchInput').addEventListener('input', updateUI); });
+</script>
+</body>
+</html>
